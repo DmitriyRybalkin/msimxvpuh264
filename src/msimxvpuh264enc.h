@@ -1,25 +1,30 @@
 
+/*
+H.264 encoder plugin for mediastreamer2 based on the openh264 library.
+Copyright (C) 2006-2012 Belledonne Communications, Grenoble
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+*/
 #ifndef MSIMXVPUH264_ENCODER_H
 #define MSIMXVPUH264_ENCODER_H
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdarg.h>
-#include <errno.h>
-#include <unistd.h>
 
 #include <mediastreamer2/msfilter.h>
 #include <mediastreamer2/msvideo.h>
 #include <mediastreamer2/rfc3984.h>
+#include <wels/codec_api.h>
 
-#include <imxvpuapi/imxvpuapi.h>
-
-#define MS_IMX_VPU_ENCODER_DEBUG 1
-
-/**
- * The goal of this small object is to tell when to send I frames at startup: at 2 and 4 seconds
- */
 class VideoStarter {
 public:
 	VideoStarter();
@@ -34,64 +39,41 @@ private:
 	int mFrameCount;
 };
 
-class MSIMXVPUH264Encoder {
 
+class MSOpenH264Encoder {
 public:
-	MSIMXVPUH264Encoder(MSFilter *f);
-	virtual ~MSIMXVPUH264Encoder();
+	MSOpenH264Encoder(MSFilter *f);
+	virtual ~MSOpenH264Encoder();
 	void initialize();
 	bool isInitialized() const { return mInitialized; }
-	void process();
+	void feed();
 	void uninitialize();
-	
 	void setFPS(float fps);
 	float getFPS() const { return mVConf.fps; }
 	void setBitrate(int bitrate);
 	int getBitrate() const { return mVConf.required_bitrate; }
 	void setSize(MSVideoSize size);
 	MSVideoSize getSize() const { return mVConf.vsize; }
-	const MSVideoConfiguration * getConfigurationList() const { return mVConfList; }
 	void addFmtp(const char *fmtp);
-	void requestVFU();
+	const MSVideoConfiguration *getConfigurationList() const { return mVConfList; }
 	void setConfiguration(MSVideoConfiguration conf);
-	
-private:
+	void requestVFU();
 
-	static void * acquireOutputBuffer(void *context, size_t size, void **acquired_handle);
-	static void finishOutputBuffer(void *context, void *acquired_handle);
+private:
 	void generateKeyframe();
-	
+	void fillNalusQueue(SFrameBSInfo& sFbi, MSQueue* nalus);
+	void calcBitrates(int &targetBitrate, int &maxBitrate) const;
+	void applyBitrate();
+
 	MSFilter *mFilter;
 	Rfc3984Context *mPacker;
+	int mPacketisationMode;
+	ISVCEncoder *mEncoder;
 	const MSVideoConfiguration *mVConfList;
 	MSVideoConfiguration mVConf;
-	int mPacketisationMode;
-	bool mInitialized;
+	VideoStarter mVideoStarter;
 	uint64_t mFrameCount;
-	
-	struct _Context
-	{
-		ImxVpuEncoder *vpuenc;
-		ImxVpuEncParams enc_params;
-		
-		ImxVpuDMABuffer *bitstream_buffer;
-		size_t bitstream_buffer_size;
-		unsigned int bitstream_buffer_alignment;
-
-		ImxVpuEncInitialInfo initial_info;
-
-		ImxVpuFramebuffer input_framebuffer;
-		ImxVpuDMABuffer *input_fb_dmabuffer;
-
-		ImxVpuFramebuffer *framebuffers;
-		ImxVpuDMABuffer **fb_dmabuffers;
-		unsigned int num_framebuffers;
-		ImxVpuFramebufferSizes calculated_sizes;
-	};
-
-	typedef struct _Context Context;
-	
-	Context *ctx;
+	bool mInitialized;
 };
 
 #endif
